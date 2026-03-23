@@ -9,6 +9,7 @@ jobs:
     env:
       VM_NAME: vm-platform-seed
       ZONE: asia-southeast1-b
+      USER_NAME: sehansassara2002
 
 
     permissions:
@@ -31,7 +32,7 @@ jobs:
 
         - name: Connect with the vm-platform-seed through SSH
           run: >
-            gcloud compute ssh ${{env.VM_NAME}} --zone=${{env.ZONE}}
+            gcloud compute ssh ${{env.USER_NAME}}@${{env.VM_NAME}} --zone=${{env.ZONE}}
             --command "echo 'Connected to vm-platform-zeed successfully!' &&
             pwd && whoami
             "
