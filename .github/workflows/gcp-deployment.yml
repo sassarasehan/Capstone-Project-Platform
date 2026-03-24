@@ -33,69 +33,58 @@ jobs:
         run: gcloud compute instances start ${{env.VM_NAME}} --zone=${{env.ZONE}}
 
       - name: Connect with the vm-platform-seed instance through SSH, pull the latest code and build the project
-        run: >
-          gcloud compute ssh ${{env.USER_NAME}}@${{env.VM_NAME}} --zone=${{env.ZONE}}
-          --command "
-          echo 'Connected to vm-platform-seed successfully!' &&
-          cd Capstone-Project-Platform/ && 
-          git pull --recurse-submodules &&
-          source ~/.bashrc &&
-          mvn clean package &&
+        run: |
+          gcloud compute ssh ${{env.USER_NAME}}@${{env.VM_NAME}} --zone=${{env.ZONE}} --command "
+          echo 'Connected to vm-platform-seed successfully!'
+          cd Capstone-Project-Platform/
+          git pull --recurse-submodules
+          source ~/.bashrc
+          mvn clean package
           
-          # Add hosts file entry
-          echo '127.0.0.1 config.platform' | sudo tee -a /etc/hosts &&
+          echo '127.0.0.1 config.platform' | sudo tee -a /etc/hosts
           
-          # Create systemd service for auto-start
-          sudo tee /etc/systemd/system/microservices.service > /dev/null << 'EOF'
-          
+          sudo bash -c 'cat > /etc/systemd/system/microservices.service << "EOF"
           [Unit]
-          Description=Microservices
-          After=network.target
-  
-          [Service]
-          Type=oneshot
-          User=${{env.USER_NAME}}
-          WorkingDirectory=/home/${{env.USER_NAME}}/Capstone-Project-Platform
-          ExecStart=/bin/bash -c '
-          cd /home/${{env.USER_NAME}}/Capstone-Project-Platform
-          nohup java -jar -Dserver.port=9000 config-server/target/Config-Server-1.0.0.jar > /tmp/config-server.log 2>&1 &
-          sleep 15
-          nohup java -jar -Dserver.port=9001 service-registry/target/Service-Registry-1.0.0.jar > /tmp/service-registry.log 2>&1 &
-          sleep 15
-          nohup java -jar -Dserver.port=7000 -Deureka.client.service-url.defaultZone=http://localhost:9001/eureka/ api-gateway/target/Api-Gateway-1.0.0.jar > /tmp/api-gateway.log 2>&1 &
-          '
-          RemainAfterExit=yes
-
-                [Install]
-                WantedBy=multi-user.target
-                EOF
+            Description=Microservices
+            After=network.target
             
-                            sudo systemctl daemon-reload &&
-                            sudo systemctl enable microservices.service &&
-                            echo 'Setup complete!'
-                  "
-
-                - name: Stop the vm-platform-seed instance
-                  run: gcloud compute instances stop ${{env.VM_NAME}} --zone=${{env.ZONE}}
-
-                - name: Delete the boot disk image
-                  run: gcloud compute images delete ${{env.IMAGE_NAME}}
-                  continue-on-error: true
-
-      - name: Create a new boot disk image with the previous image name
-        run: |
-          gcloud compute images create ${{env.IMAGE_NAME}} \
-          --source-disk=${{env.VM_NAME}} \
-          --source-disk-zone=${{env.ZONE}} \
-          --storage-location=${{env.REGION}}
-
-      - name: Update the instance group with the new image
-        run: |
-          gcloud compute instance-groups managed rolling-action start-update ${{env.INSTANCE_GROUP}} \
-          --region=${{env.REGION}} \
-          --type=proactive \
-          --max-unavailable=3 \
-          --minimal-action=replace \
-          --replacement-method=recreate \
-          --max-surge=0 \
-          --version=template=projects/${{ secrets.GCP_PROJECT_ID }}/regions/${{ env.REGION }}/instanceTemplates/${{ env.INSTANCE_TEMPLATE }}
+            [Service]
+            Type=oneshot
+            User=${{env.USER_NAME}}
+            WorkingDirectory=/home/${{env.USER_NAME}}/Capstone-Project-Platform
+            ExecStart=/bin/bash -c "cd /home/${{env.USER_NAME}}/Capstone-Project-Platform && nohup java -jar -Dserver.port=9000 config-server/target/Config-Server-1.0.0.jar > /tmp/config-server.log 2>&1 & sleep 15 && nohup java -jar -Dserver.port=9001 service-registry/target/Service-Registry-1.0.0.jar > /tmp/service-registry.log 2>&1 & sleep 15 && nohup java -jar -Dserver.port=7000 -Deureka.client.service-url.defaultZone=http://localhost:9001/eureka/ api-gateway/target/Api-Gateway-1.0.0.jar > /tmp/api-gateway.log 2>&1 &"
+            RemainAfterExit=yes
+            
+            [Install]
+            WantedBy=multi-user.target
+            EOF'
+            
+            sudo systemctl daemon-reload
+            sudo systemctl enable microservices.service
+            echo 'Setup complete!'
+            "
+          
+          - name: Stop the vm-platform-seed instance
+            run: gcloud compute instances stop ${{env.VM_NAME}} --zone=${{env.ZONE}}
+          
+          - name: Delete the boot disk image
+            run: gcloud compute images delete ${{env.IMAGE_NAME}}
+            continue-on-error: true
+          
+          - name: Create a new boot disk image with the previous image name
+            run: |
+              gcloud compute images create ${{env.IMAGE_NAME}} \
+              --source-disk=${{env.VM_NAME}} \
+              --source-disk-zone=${{env.ZONE}} \
+              --storage-location=${{env.REGION}}
+          
+          - name: Update the instance group with the new image
+            run: |
+              gcloud compute instance-groups managed rolling-action start-update ${{env.INSTANCE_GROUP}} \
+              --region=${{env.REGION}} \
+              --type=proactive \
+              --max-unavailable=3 \
+              --minimal-action=replace \
+              --replacement-method=recreate \
+              --max-surge=0 \
+              --version=template=projects/${{ secrets.GCP_PROJECT_ID }}/regions/${{ env.REGION }}/instanceTemplates/${{ env.INSTANCE_TEMPLATE }}
